@@ -1,0 +1,583 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User management tables
+model User {
+  userId              String   @id @default(cuid()) @map("user_id")
+  phoneNumber         String   @unique @map("phone_number")
+  email               String?
+  firstName           String   @map("first_name")
+  lastName            String   @map("last_name")
+  userType            UserType @default(CUSTOMER) @map("user_type")
+  status              UserStatus @default(ACTIVE)
+  pinHash             String?  @map("pin_hash")
+  biometricEnabled    Boolean  @default(false) @map("biometric_enabled")
+  profilePhotoUrl     String?  @map("profile_photo_url")
+  dateOfBirth         DateTime? @map("date_of_birth") @db.Date
+  gender              Gender?
+  addressLine1        String?  @map("address_line_1")
+  addressLine2        String?  @map("address_line_2")
+  city                String?
+  state               String?
+  postalCode          String?  @map("postal_code")
+  country             String   @default("India")
+  fcmToken            String?  @map("fcm_token")
+  fcmTokenUpdatedAt   DateTime? @map("fcm_token_updated_at")
+  lastLogin           DateTime? @map("last_login")
+  loginAttempts       Int      @default(0) @map("login_attempts")
+  accountLockedUntil  DateTime? @map("account_locked_until")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  employeeDetails     EmployeeDetail?
+  customerApplications LoanApplication[] @relation("CustomerApplications")
+  fieldAgentApplications LoanApplication[] @relation("FieldAgentApplications")
+  activeLoans         ActiveLoan[]
+  createdApplications LoanApplication[] @relation("CreatedApplications")
+  collectedPayments   Payment[]
+  customerDocuments   Document[] @relation("CustomerDocuments")
+  createdDocuments    Document[] @relation("CreatedDocuments")
+  customerQRSessions  QRAuthentication[] @relation("CustomerQR")
+  employeeQRSessions  QRAuthentication[] @relation("EmployeeQR")
+  auditLogs           AuditLog[]
+  notifications       Notification[] @relation("UserNotifications")
+  biometricData       BiometricData? @relation("UserBiometric")
+  biometricLogs       BiometricLog[] @relation("UserBiometricLogs")
+  biometricVerifications BiometricVerification[] @relation("UserBiometricVerifications")
+  customerDevices     CustomerDevice[] @relation("CustomerDevices")
+  workflowAssignments WorkflowStep[] @relation("WorkflowAssignments")
+  kycDetails          KYCDetail? @relation("UserKYC")
+
+  @@map("users")
+}
+
+model EmployeeDetail {
+  employeeId          String   @unique @map("employee_id")
+  userId              String   @unique @map("user_id")
+  department          String?
+  designation         String?
+  reportingManagerId  String?  @map("reporting_manager_id")
+  employmentStartDate DateTime? @map("employment_start_date") @db.Date
+  employmentStatus    EmploymentStatus @default(ACTIVE) @map("employment_status")
+  assignedRegions     Json?    @map("assigned_regions")
+  deviceId            String?  @map("device_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user                User     @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("employee_details")
+}
+
+model LoanApplication {
+  applicationId       String   @id @default(cuid()) @map("application_id")
+  customerId          String   @map("customer_id")
+  applicationNumber   String   @unique @map("application_number")
+  requestedAmount     Decimal  @map("requested_amount") @db.Decimal(15, 2)
+  loanPurpose         String?  @map("loan_purpose")
+  applicationStatus   ApplicationStatus @default(DRAFT) @map("application_status")
+  goldItems           Json?    @map("gold_items")
+  totalWeight         Decimal? @map("total_weight") @db.Decimal(10, 3)
+  estimatedValue      Decimal? @map("estimated_value") @db.Decimal(15, 2)
+  purityDetails       Json?    @map("purity_details")
+  appraisalPhotos     Json?    @map("appraisal_photos")
+  fieldAgentId        String?  @map("field_agent_id")
+  verificationDate    DateTime? @map("verification_date")
+  verificationStatus  VerificationStatus? @map("verification_status")
+  verificationNotes   String?  @map("verification_notes")
+  verificationPhotos  Json?    @map("verification_photos")
+  submittedAt         DateTime? @map("submitted_at")
+  approvedAt          DateTime? @map("approved_at")
+  createdBy           String   @map("created_by")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  customer            User     @relation("CustomerApplications", fields: [customerId], references: [userId])
+  fieldAgent          User?    @relation("FieldAgentApplications", fields: [fieldAgentId], references: [userId])
+  createdByUser       User     @relation("CreatedApplications", fields: [createdBy], references: [userId])
+  activeLoan          ActiveLoan?
+  workflowSteps       WorkflowStep[]
+
+  @@map("loan_applications")
+}
+
+model ActiveLoan {
+  loanId              String   @id @default(cuid()) @map("loan_id")
+  applicationId       String   @unique @map("application_id")
+  customerId          String   @map("customer_id")
+  loanNumber          String   @unique @map("loan_number")
+  principalAmount     Decimal  @map("principal_amount") @db.Decimal(15, 2)
+  interestRate        Decimal  @map("interest_rate") @db.Decimal(5, 2)
+  loanTenureMonths    Int      @map("loan_tenure_months")
+  loanStartDate       DateTime @map("loan_start_date") @db.Date
+  loanEndDate         DateTime @map("loan_end_date") @db.Date
+  loanStatus          LoanStatus @default(ACTIVE) @map("loan_status")
+  outstandingPrincipal Decimal @map("outstanding_principal") @db.Decimal(15, 2)
+  accruedInterest     Decimal  @default(0) @map("accrued_interest") @db.Decimal(15, 2)
+  totalOutstanding    Decimal  @map("total_outstanding") @db.Decimal(15, 2)
+  emiAmount           Decimal? @map("emi_amount") @db.Decimal(15, 2)
+  nextDueDate         DateTime? @map("next_due_date") @db.Date
+  lastPaymentDate     DateTime? @map("last_payment_date") @db.Date
+  pledgedGoldItems    Json?    @map("pledged_gold_items")
+  storageLocation     String?  @map("storage_location")
+  insuranceDetails    Json?    @map("insurance_details")
+  marketValueTracking Json?    @map("market_value_tracking")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  application         LoanApplication @relation(fields: [applicationId], references: [applicationId])
+  customer            User     @relation(fields: [customerId], references: [userId])
+  payments            Payment[]
+  documents           Document[]
+
+  @@map("active_loans")
+}
+
+model Payment {
+  paymentId           String   @id @default(cuid()) @map("payment_id")
+  loanId              String   @map("loan_id")
+  paymentNumber       String   @unique @map("payment_number")
+  paymentAmount       Decimal  @map("payment_amount") @db.Decimal(15, 2)
+  paymentDate         DateTime @default(now()) @map("payment_date")
+  paymentMethod       PaymentMethod @map("payment_method")
+  paymentStatus       PaymentStatus @default(PENDING) @map("payment_status")
+  principalPayment    Decimal  @default(0) @map("principal_payment") @db.Decimal(15, 2)
+  interestPayment     Decimal  @default(0) @map("interest_payment") @db.Decimal(15, 2)
+  penaltyPayment      Decimal  @default(0) @map("penalty_payment") @db.Decimal(15, 2)
+  chargesPayment      Decimal  @default(0) @map("charges_payment") @db.Decimal(15, 2)
+  collectedBy         String?  @map("collected_by")
+  collectionLocation  String?  @map("collection_location")
+  collectionMethod    CollectionMethod? @map("collection_method")
+  receiptNumber       String?  @unique @map("receipt_number")
+  receiptGeneratedAt  DateTime? @map("receipt_generated_at")
+  customerSignature   String?  @map("customer_signature")
+  paymentProof        Json?    @map("payment_proof")
+  verificationStatus  PaymentVerificationStatus @default(VERIFIED) @map("verification_status")
+  gatewayTransactionId String? @map("gateway_transaction_id")
+  gatewayResponse     Json?    @map("gateway_response")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  loan                ActiveLoan @relation(fields: [loanId], references: [loanId])
+  collector           User?    @relation(fields: [collectedBy], references: [userId])
+
+  @@map("payments")
+}
+
+model Document {
+  documentId          String   @id @default(cuid()) @map("document_id")
+  loanId              String?  @map("loan_id")
+  customerId          String?  @map("customer_id")
+  documentType        DocumentType @map("document_type")
+  documentCategory    String?  @map("document_category")
+  title               String
+  fileName            String   @map("file_name")
+  filePath            String   @map("file_path")
+  fileSize            BigInt?  @map("file_size")
+  mimeType            String?  @map("mime_type")
+  generatedAt         DateTime @default(now()) @map("generated_at")
+  expiresAt           DateTime? @map("expires_at")
+  createdBy           String   @map("created_by")
+  accessPermissions   Json?    @map("access_permissions")
+  downloadCount       Int      @default(0) @map("download_count")
+  lastAccessed        DateTime? @map("last_accessed")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  loan                ActiveLoan? @relation(fields: [loanId], references: [loanId])
+  customer            User?    @relation("CustomerDocuments", fields: [customerId], references: [userId])
+  createdByUser       User     @relation("CreatedDocuments", fields: [createdBy], references: [userId])
+  kycDocuments        KYCDocument[] @relation("KYCDocuments")
+
+  @@map("documents")
+}
+
+model QRAuthentication {
+  qrSessionId         String   @id @default(cuid()) @map("qr_session_id")
+  customerId          String   @map("customer_id")
+  employeeId          String?  @map("employee_id")
+  qrToken             String   @map("qr_token")
+  expiresAt           DateTime @map("expires_at")
+  location            String?  // Will store as "lat,lng" string
+  sessionStatus       QRSessionStatus @default(ACTIVE) @map("session_status")
+  createdAt           DateTime @default(now()) @map("created_at")
+  usedAt              DateTime? @map("used_at")
+
+  // Relations
+  customer            User     @relation("CustomerQR", fields: [customerId], references: [userId])
+  employee            User?    @relation("EmployeeQR", fields: [employeeId], references: [userId])
+
+  @@map("qr_authentication")
+}
+
+model AuditLog {
+  auditId             String   @id @default(cuid()) @map("audit_id")
+  userId              String?  @map("user_id")
+  tableName           String?  @map("table_name")
+  recordId            String?  @map("record_id")
+  action              AuditAction
+  oldValues           Json?    @map("old_values")
+  newValues           Json?    @map("new_values")
+  ipAddress           String?  @map("ip_address")
+  userAgent           String?  @map("user_agent")
+  location            String?  // Will store as "lat,lng" string
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user                User?    @relation(fields: [userId], references: [userId])
+
+  @@map("audit_logs")
+}
+
+model Notification {
+  notificationId      String   @id @default(cuid()) @map("notification_id")
+  userId              String   @map("user_id")
+  type                String
+  title               String
+  message             String
+  data                Json?
+  priority            String   @default("medium")
+  actionRequired      Boolean  @default(false) @map("action_required")
+  readAt              DateTime? @map("read_at")
+  expiresAt           DateTime? @map("expires_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  // Relations
+  user                User     @relation("UserNotifications", fields: [userId], references: [userId])
+
+  @@map("notifications")
+}
+
+model BiometricData {
+  biometricId         String   @id @default(cuid()) @map("biometric_id")
+  userId              String   @unique @map("user_id")
+  template            String   // Encrypted biometric template
+  biometricType       String   @default("fingerprint") @map("biometric_type")
+  deviceId            String?  @map("device_id")
+  deviceInfo          String?  @map("device_info") // JSON string
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user                User     @relation("UserBiometric", fields: [userId], references: [userId])
+
+  @@map("biometric_data")
+}
+
+model BiometricLog {
+  logId               String   @id @default(cuid()) @map("log_id")
+  userId              String   @map("user_id")
+  deviceId            String?  @map("device_id")
+  success             Boolean
+  location            String?
+  attemptedAt         DateTime @default(now()) @map("attempted_at")
+
+  // Relations
+  user                User     @relation("UserBiometricLogs", fields: [userId], references: [userId])
+
+  @@map("biometric_logs")
+}
+
+model BiometricVerification {
+  verificationId      String   @id @default(cuid()) @map("verification_id")
+  userId              String   @map("user_id")
+  operation           String
+  success             Boolean
+  operationData       String?  @map("operation_data") // JSON string
+  verifiedAt          DateTime @default(now()) @map("verified_at")
+
+  // Relations
+  user                User     @relation("UserBiometricVerifications", fields: [userId], references: [userId])
+
+  @@map("biometric_verifications")
+}
+
+model CustomerDevice {
+  deviceId            String   @id @map("device_id")
+  customerId          String   @map("customer_id")
+  deviceName          String?  @map("device_name")
+  deviceType          String?  @map("device_type")
+  deviceInfo          String?  @map("device_info") // JSON string
+  isActive            Boolean  @default(true) @map("is_active")
+  registeredAt        DateTime @default(now()) @map("registered_at")
+  lastUsedAt          DateTime? @map("last_used_at")
+
+  // Relations
+  customer            User     @relation("CustomerDevices", fields: [customerId], references: [userId])
+
+  @@map("customer_devices")
+}
+
+model WorkflowStep {
+  id              Int      @id @default(autoincrement())
+  applicationId   String   @map("application_id")
+  stepId          String   @map("step_id")
+  stepName        String   @map("step_name")
+  stepOrder       Int      @map("step_order")
+  status          WorkflowStepStatus @default(WAITING)
+  assignedTo      String?  @map("assigned_to")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  timeoutAt       DateTime? @map("timeout_at")
+  remarks         String?
+  data            Json     @default("{}")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  application     LoanApplication @relation(fields: [applicationId], references: [applicationId], onDelete: Cascade)
+  assignedUser    User?    @relation("WorkflowAssignments", fields: [assignedTo], references: [userId])
+
+  @@map("workflow_steps")
+}
+
+model KYCDetail {
+  kycId               String   @id @default(cuid()) @map("kyc_id")
+  userId              String   @unique @map("user_id")
+  aadharNumber        String?  @map("aadhar_number")
+  aadharVerified      Boolean  @default(false) @map("aadhar_verified")
+  panNumber           String?  @map("pan_number")
+  panVerified         Boolean  @default(false) @map("pan_verified")
+  selfieVerified      Boolean  @default(false) @map("selfie_verified")
+  kycStatus           KYCStatus @default(INCOMPLETE) @map("kyc_status")
+  verificationDate    DateTime? @map("verification_date")
+  verifiedBy          String?  @map("verified_by")
+  verificationNotes   String?  @map("verification_notes")
+  rejectionReason     String?  @map("rejection_reason")
+  resubmissionAllowed Boolean  @default(true) @map("resubmission_allowed")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  user                User     @relation("UserKYC", fields: [userId], references: [userId], onDelete: Cascade)
+  kycDocuments        KYCDocument[]
+
+  @@map("kyc_details")
+}
+
+model KYCDocument {
+  id                  String   @id @default(cuid())
+  kycId               String   @map("kyc_id")
+  documentId          String   @map("document_id")
+  documentType        KYCDocumentType @map("document_type")
+  subType             String?  @map("sub_type") // front, back, left, right, center
+  uploadedAt          DateTime @default(now()) @map("uploaded_at")
+  verified            Boolean  @default(false)
+  verificationNotes   String?  @map("verification_notes")
+
+  // Relations
+  kycDetail           KYCDetail @relation(fields: [kycId], references: [kycId], onDelete: Cascade)
+  document            Document  @relation("KYCDocuments", fields: [documentId], references: [documentId])
+
+  @@unique([kycId, documentType, subType])
+  @@map("kyc_documents")
+}
+
+// Enums
+enum KYCDocumentType {
+  AADHAR @map("aadhar")
+  PAN @map("pan")
+  SELFIE @map("selfie")
+
+  @@map("kyc_document_type")
+}
+
+enum UserType {
+  CUSTOMER @map("customer")
+  EMPLOYEE @map("employee")
+  ADMIN @map("admin")
+  SUPER_ADMIN @map("super_admin")
+
+  @@map("user_type")
+}
+
+enum UserStatus {
+  ACTIVE @map("active")
+  INACTIVE @map("inactive")
+  SUSPENDED @map("suspended")
+
+  @@map("user_status")
+}
+
+enum Gender {
+  MALE @map("male")
+  FEMALE @map("female")
+  OTHER @map("other")
+
+  @@map("gender")
+}
+
+enum EmploymentStatus {
+  ACTIVE @map("active")
+  TERMINATED @map("terminated")
+  ON_LEAVE @map("on_leave")
+
+  @@map("employment_status")
+}
+
+enum ApplicationStatus {
+  DRAFT @map("draft")
+  SUBMITTED @map("submitted")
+  UNDER_REVIEW @map("under_review")
+  APPROVED @map("approved")
+  REJECTED @map("rejected")
+  CANCELLED @map("cancelled")
+
+  @@map("application_status")
+}
+
+enum VerificationStatus {
+  PENDING @map("pending")
+  COMPLETED @map("completed")
+  FAILED @map("failed")
+
+  @@map("verification_status")
+}
+
+enum LoanStatus {
+  ACTIVE @map("active")
+  CLOSED @map("closed")
+  DEFAULTED @map("defaulted")
+  FORECLOSED @map("foreclosed")
+
+  @@map("loan_status")
+}
+
+enum PaymentMethod {
+  CASH @map("cash")
+  UPI @map("upi")
+  CARD @map("card")
+  BANK_TRANSFER @map("bank_transfer")
+  WALLET @map("wallet")
+
+  @@map("payment_method")
+}
+
+enum PaymentStatus {
+  PENDING @map("pending")
+  COMPLETED @map("completed")
+  FAILED @map("failed")
+  REFUNDED @map("refunded")
+
+  @@map("payment_status")
+}
+
+enum CollectionMethod {
+  OFFICE_VISIT @map("office_visit")
+  HOME_COLLECTION @map("home_collection")
+  ONLINE @map("online")
+
+  @@map("collection_method")
+}
+
+enum PaymentVerificationStatus {
+  VERIFIED @map("verified")
+  PENDING @map("pending")
+  DISPUTED @map("disputed")
+
+  @@map("payment_verification_status")
+}
+
+enum DocumentType {
+  STATEMENT @map("statement")
+  RECEIPT @map("receipt")
+  AGREEMENT @map("agreement")
+  CERTIFICATE @map("certificate")
+  REPORT @map("report")
+  KYC @map("kyc")
+  PHOTO @map("photo")
+
+  @@map("document_type")
+}
+
+enum QRSessionStatus {
+  ACTIVE @map("active")
+  USED @map("used")
+  EXPIRED @map("expired")
+  REVOKED @map("revoked")
+
+  @@map("qr_session_status")
+}
+
+enum AuditAction {
+  CREATE @map("CREATE")
+  UPDATE @map("UPDATE")
+  DELETE @map("DELETE")
+  LOGIN @map("LOGIN")
+  LOGOUT @map("LOGOUT")
+
+  @@map("audit_action")
+}
+
+enum WorkflowStepStatus {
+  WAITING @map("waiting")
+  PENDING @map("pending")
+  IN_PROGRESS @map("in_progress")
+  COMPLETED @map("completed")
+  REJECTED @map("rejected")
+  INFO_REQUESTED @map("info_requested")
+  VERIFIED @map("verified")
+  CANCELLED @map("cancelled")
+
+  @@map("workflow_step_status")
+}
+
+enum KYCStatus {
+  INCOMPLETE @map("incomplete")
+  PENDING_VERIFICATION @map("pending_verification")
+  VERIFIED @map("verified")
+  REJECTED @map("rejected")
+  EXPIRED @map("expired")
+
+  @@map("kyc_status")
+}
+
+// Gold Calculator Tables
+model GoldRate {
+  id              Int      @id @default(autoincrement())
+  purity          GoldPurity
+  ratePerGram     Decimal  @map("rate_per_gram") @db.Decimal(10, 2)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([purity])
+  @@map("gold_rates")
+}
+
+model InterestSchemeRate {
+  id              Int      @id @default(autoincrement())
+  schemeLabel     String   @map("scheme_label")
+  interestRate    Decimal  @map("interest_rate") @db.Decimal(5, 2)
+  purity          GoldPurity
+  ratePerGram     Decimal  @map("rate_per_gram") @db.Decimal(10, 2)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([purity, interestRate])
+  @@map("interest_scheme_rates")
+}
+
+enum GoldPurity {
+  TWENTYFOUR_K @map("24k")
+  TWENTYTWO_K @map("22k")
+  EIGHTEEN_K @map("18k")
+  MIXED @map("mixed")
+
+  @@map("gold_purity")
+}
