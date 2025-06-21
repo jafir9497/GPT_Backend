@@ -61,11 +61,31 @@ const refreshTokenValidation = [
     .withMessage('Refresh token is required'),
 ];
 
+const forgotPinValidation = [
+  body('phoneNumber')
+    .matches(/^(\+\d{1,4})?\d{10}$/)
+    .withMessage('Invalid phone number format'),
+];
+
+const resetPinValidation = [
+  body('phoneNumber')
+    .matches(/^(\+\d{1,4})?\d{10}$/)
+    .withMessage('Invalid phone number format'),
+  body('idToken')
+    .isString()
+    .withMessage('Firebase ID token is required'),
+  body('newPin')
+    .matches(/^\d{4}$/)
+    .withMessage('New PIN must be exactly 4 digits'),
+];
+
 // Public routes (no authentication required)
 router.post('/send-otp', sendOTPValidation, validationMiddleware, AuthController.sendOTP);
 router.post('/verify-otp', verifyOTPValidation, validationMiddleware, AuthController.verifyOTP);
 router.post('/set-pin', setPinValidation, validationMiddleware, AuthController.setPin);
 router.post('/login', loginWithPinValidation, validationMiddleware, AuthController.loginWithPin);
+router.post('/forgot-pin', forgotPinValidation, validationMiddleware, AuthController.forgotPin);
+router.post('/reset-pin', resetPinValidation, validationMiddleware, AuthController.resetPin);
 router.post('/refresh-token', refreshTokenValidation, AuthMiddleware.verifyRefreshToken, validationMiddleware, AuthController.refreshToken);
 
 // Protected routes (authentication required)

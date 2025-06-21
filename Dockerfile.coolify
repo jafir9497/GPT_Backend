@@ -1,19 +1,20 @@
+# Dockerfile optimized for Coolify deployment
+# This version uses environment variables for Firebase instead of JSON file
+
 # Multi-stage build for optimized production image
 FROM node:18-alpine AS builder
 
 # Set working directory
 WORKDIR /app
 
-# Install build dependencies for native modules and Chromium for PDF generation
-RUN apk add --no-cache python3 make g++ git chromium
+# Install build dependencies for native modules
+RUN apk add --no-cache python3 make g++ git
 
 # Copy package files first for better layer caching
 COPY package*.json ./
 COPY tsconfig.json ./
 
 # Install all dependencies (including dev dependencies for build)
-# Skip Puppeteer download for ARM64 compatibility
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 RUN npm ci
 
 # Copy source code
@@ -29,12 +30,8 @@ RUN npm run build
 # Production stage
 FROM node:18-alpine AS production
 
-# Install runtime dependencies (add curl for health checks and chromium for PDF generation)
-RUN apk add --no-cache dumb-init curl chromium
-
-# Set Puppeteer to use system Chromium
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# Install runtime dependencies
+RUN apk add --no-cache dumb-init curl
 
 # Set working directory
 WORKDIR /app
@@ -46,8 +43,7 @@ RUN addgroup -g 1001 -S nodejs && \
 # Copy package files
 COPY package*.json ./
 
-# Install only production dependencies (skip Puppeteer download)
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+# Install only production dependencies
 RUN npm ci --only=production --ignore-scripts && npm cache clean --force
 
 # Copy built application from builder stage
@@ -55,13 +51,13 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
 
-# Create necessary directories and default assets
-RUN mkdir -p assets/logos logs documents/customers documents/employees documents/system/backups documents/system/exports documents/system/logs documents/templates/agreements documents/templates/receipts documents/templates/reports documents/templates/statements uploads && \
+# Create necessary directories and assets
+RUN mkdir -p logs documents/customers documents/employees documents/system/backups documents/system/exports documents/system/logs documents/templates/agreements documents/templates/receipts documents/templates/reports documents/templates/statements uploads assets/logos && \
     chown -R goldloan:nodejs /app && \
-    chmod -R 755 assets documents logs uploads
+    chmod -R 755 documents logs uploads assets
 
-# Copy assets if they exist (optional)
-# Note: Firebase will be configured via environment variables in production
+# Copy assets if they exist (optional - will use defaults if not available)
+COPY assets/ ./assets/ 2>/dev/null || echo "Using default assets"
 
 # Switch to non-root user
 USER goldloan
@@ -69,7 +65,7 @@ USER goldloan
 # Expose port
 EXPOSE 3000
 
-# Add health check with curl (simpler and more reliable)
+# Add health check with better timeout handling
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:3000/health || exit 1
 

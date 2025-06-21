@@ -1,0 +1,31 @@
+# Coolify configuration for monorepo backend deployment
+# Place this file in the project root (not in backend folder)
+
+version: '1'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - backend_uploads:/app/uploads
+      - backend_documents:/app/documents
+      - backend_logs:/app/logs
+
+volumes:
+  backend_uploads:
+  backend_documents:
+  backend_logs:
