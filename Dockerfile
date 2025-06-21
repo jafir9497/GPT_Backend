@@ -60,8 +60,10 @@ RUN mkdir -p assets/logos logs documents/customers documents/employees documents
     chown -R goldloan:nodejs /app && \
     chmod -R 755 assets documents logs uploads
 
+# Copy Firebase service account file for production
+COPY gpt-gold-loan-firebase-adminsdk-fbsvc-cc5648f130.json ./
+
 # Copy assets if they exist (optional)
-# Note: Firebase will be configured via environment variables in production
 
 # Switch to non-root user
 USER goldloan

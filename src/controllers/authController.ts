@@ -12,7 +12,18 @@ import * as path from 'path';
 // Initialize Firebase Admin (if not already initialized)
 if (!admin.apps.length) {
   try {
-    // Try to initialize with environment variables first (for Coolify deployment)
+    // Always try service account file first (works for both local and Coolify)
+    const serviceAccountPath = path.join(__dirname, '../../gpt-gold-loan-firebase-adminsdk-fbsvc-cc5648f130.json');
+    
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccountPath),
+      projectId: 'gpt-gold-loan',
+    });
+    logger.info('Firebase Admin initialized successfully with service account file');
+  } catch (error) {
+    logger.warn('Service account file not found, trying environment variables...');
+    
+    // Fallback to environment variables if JSON file not available
     if (process.env.FIREBASE_PRIVATE_KEY && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PROJECT_ID) {
       const serviceAccount = {
         projectId: process.env.FIREBASE_PROJECT_ID,
@@ -27,18 +38,9 @@ if (!admin.apps.length) {
       });
       logger.info('Firebase Admin initialized successfully with environment variables');
     } else {
-      // Fallback to service account file for local development
-      const serviceAccountPath = path.join(__dirname, '../../gpt-gold-loan-firebase-adminsdk-fbsvc-cc5648f130.json');
-      
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccountPath),
-        projectId: 'gpt-gold-loan',
-      });
-      logger.info('Firebase Admin initialized successfully with service account file');
+      logger.error('Firebase Admin initialization failed: No service account file or environment variables found');
+      logger.warn('Continuing without Firebase Admin - some features may not work');
     }
-  } catch (error) {
-    logger.error('Firebase Admin initialization failed:', error);
-    logger.warn('Continuing without Firebase Admin - some features may not work');
   }
 }
 
